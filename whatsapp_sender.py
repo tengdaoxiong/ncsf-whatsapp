@@ -123,6 +123,24 @@ with col_config:
 with col_main:
     st.title("NCSF WhatsApp Lead Messenger")
     st.markdown("---")
+    
+    # ★ Process the CSV immediately on upload
+    if file:
+        df = pd.read_csv(file, header=None, names=["Raw Input"]).dropna()
+        df["Phone Number"] = df["Raw Input"].astype(str).apply(normalize_number)
+        valid = df.dropna(subset=["Phone Number"])
+        st.session_state["numbers"] = valid["Phone Number"].tolist()
+
+    # Now your preview will always show if you have data
+    if st.session_state["numbers"]:
+        st.subheader("Preview Uploaded Leads")
+        df_disp = pd.DataFrame({
+            "Raw Input": df["Raw Input"],
+            "Normalized": df["Phone Number"]
+        }).reset_index(drop=True)
+        df_disp.index = df_disp.index + 1
+        df_disp.index.name = "No."
+        st.dataframe(df_disp, use_container_width=True)
 
     if send_btn:
         # Load numbers from file or previous session
@@ -199,4 +217,4 @@ with col_main:
         st.dataframe(df_disp, use_container_width=True)
 
     st.markdown("---")
-    st.caption("Built for NCSF Singapore · Powered by internal tech team")
+    st.caption("Built for NCSF Singapore · 2025")
