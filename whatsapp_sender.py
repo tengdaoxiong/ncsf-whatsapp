@@ -59,12 +59,11 @@ st.session_state.setdefault("numbers", [])
 st.session_state.setdefault("success", 0)
 st.session_state.setdefault("failure", 0)
 
-# --- Sidebar: Credentials & Controls ---
-st.sidebar.header("🔑 WhatsApp API Credentials...")
-token_input     = st.sidebar.text_area("Access Token", value=ACCESS_TOKEN, height=100)
-phone_id_input  = st.sidebar.text_input("Phone Number ID", value=PHONE_NUMBER_ID)
+# --- Sidebar: Credentials & Config ---
+st.sidebar.header("🔑 WhatsApp API Credentials")
+token_input = st.sidebar.text_area("Access Token", value=ACCESS_TOKEN, height=100)
+phone_id_input = st.sidebar.text_input("Phone Number ID", value=PHONE_NUMBER_ID)
 business_id_input = st.sidebar.text_input("Business Account ID", value=BUSINESS_ACCOUNT_ID)
-
 if st.sidebar.button("Save Credentials"):
     if token_input and phone_id_input and business_id_input:
         save_credentials(token_input, phone_id_input, business_id_input)
@@ -72,125 +71,125 @@ if st.sidebar.button("Save Credentials"):
     else:
         st.sidebar.error("All fields are required.")
 
-ACCESS_TOKEN      = token_input or ACCESS_TOKEN
-PHONE_NUMBER_ID  = phone_id_input or PHONE_NUMBER_ID
+ACCESS_TOKEN = token_input or ACCESS_TOKEN
+PHONE_NUMBER_ID = phone_id_input or PHONE_NUMBER_ID
 BUSINESS_ACCOUNT_ID = business_id_input or BUSINESS_ACCOUNT_ID
 
-st.sidebar.markdown("---")
+# --- Main Layout ---
+col_config, col_main = st.columns([3, 7], gap="large")
 
-# File uploader
-file = st.sidebar.file_uploader(
-    "Upload leads CSV (one column, no header; e.g. 6598578141, +65 98578141, 98578141)",
-    type="csv"
-)
+with col_config:
+    st.header("Configuration")
 
-# Send / Refresh buttons
-btn_send, btn_refresh = st.sidebar.columns([4,1])
-send_clicked  = btn_send.button("Send Messages")
-if btn_refresh.button("🔄", help="Refresh template list"):
-    get_whatsapp_templates.clear()
-    st.sidebar.success("Template list refreshed.")
+    file = st.file_uploader(
+        "Upload leads CSV (one column, no header; e.g. 6598578141, +65 98578141, 98578141)",
+        type="csv"
+    )
 
-# Template selector & preview
-try:
-    templates = get_whatsapp_templates(ACCESS_TOKEN, BUSINESS_ACCOUNT_ID)
-    template_names = [tpl["name"] for tpl in templates]
-    template_name = st.sidebar.selectbox("WhatsApp Template", template_names)
-except Exception as e:
-    st.sidebar.error(f"Failed to load templates: {e}")
-    template_name = st.sidebar.text_input("Template Name", "hello_world")
+    # Buttons row: Send & Refresh
+    btn_send, btn_refresh = st.columns([4, 1])
+    send_btn = btn_send.button("Send Messages")
+    if btn_refresh.button("🔄", help="Refresh template list"):
+        get_whatsapp_templates.clear()
+        st.success("Template list refreshed.")
 
-if 'templates' in locals() and template_name:
-    selected = next((tpl for tpl in templates if tpl["name"] == template_name), None)
-    if selected:
-        st.sidebar.markdown("**Template Preview**")
-        for comp in selected.get("components", []):
-            if comp.get("type") == "HEADER" and comp.get("format") == "TEXT":
-                st.sidebar.markdown(f"**Header:** {comp.get('text','')}  ")
-            elif comp.get("type") == "BODY":
-                st.sidebar.code(comp.get("text",""), language="text")
+    # Template dropdown
+    try:
+        templates = get_whatsapp_templates(ACCESS_TOKEN, BUSINESS_ACCOUNT_ID)
+        names = [tpl["name"] for tpl in templates]
+        template_name = st.selectbox("WhatsApp Template", names)
+    except Exception as e:
+        st.error(f"Failed to load templates: {e}")
+        template_name = st.text_input("Template Name", "hello_world")
 
-# --- Main Page Content ---
-st.title("NCSF WhatsApp Lead Messenger")
-st.markdown("---")
+    # Preview
+    if 'templates' in locals() and template_name:
+        selected = next((tpl for tpl in templates if tpl["name"] == template_name), None)
+        if selected:
+            st.subheader("Template Preview")
+            for comp in selected.get("components", []):
+                if comp.get("type") == "HEADER" and comp.get("format") == "TEXT":
+                    st.markdown(f"**Header:** {comp.get('text','')}  ")
+                elif comp.get("type") == "BODY":
+                    st.code(comp.get("text",""), language="text")
 
-# Handle sending
-if send_clicked:
-    # Load numbers from file if provided
-    if file:
-        df = pd.read_csv(file, header=None, names=["Raw Input"]).dropna()
-        df["Phone Number"] = df["Raw Input"].astype(str).apply(normalize_number)
-        valid = df.dropna(subset=["Phone Number"])
-        st.session_state["numbers"] = valid["Phone Number"].tolist()
+with col_main:
+    st.title("NCSF WhatsApp Lead Messenger")
+    st.markdown("---")
 
-    numbers = st.session_state["numbers"]
-    if not numbers:
-        st.error("No valid leads to send. Upload a valid CSV.")
-    else:
-        total = len(numbers)
-        succ = fail = 0
-        log = []
-        progress = st.progress(0)
-        status_area = st.empty()
+    if send_btn:
+        # Load numbers from file or previous session
+        if file:
+            df = pd.read_csv(file, header=None, names=["Raw Input"]).dropna()
+            df["Phone Number"] = df["Raw Input"].astype(str).apply(normalize_number)
+            valid = df.dropna(subset=["Phone Number"])
+            st.session_state["numbers"] = valid["Phone Number"].tolist()
 
-        # Determine language code
-        tpl = next((t for t in templates if t["name"] == template_name), None)
-        lang_entry = tpl.get("language") if tpl else {}
-        lang_code = lang_entry.get("code") if isinstance(lang_entry, dict) else (lang_entry or "en_US")
+        numbers = st.session_state["numbers"]
+        if not numbers:
+            st.error("No valid leads to send. Upload a valid CSV.")
+        else:
+            total = len(numbers)
+            success = failure = 0
+            log = []
+            progress = st.progress(0)
+            status_area = st.empty()
 
-        for idx, num in enumerate(numbers, start=1):
-            url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
-            headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": num,
-                "type": "template",
-                "template": {"name": template_name, "language": {"code": lang_code}}
-            }
-            resp = requests.post(url, headers=headers, json=payload)
-            try:
-                err = resp.json().get("error", {}).get("message", "")
-            except Exception:
-                err = resp.text
+            # Determine language code
+            tpl = next((t for t in templates if t["name"] == template_name), None)
+            lang_entry = tpl.get("language") if tpl else {}
+            lang_code = lang_entry.get("code") if isinstance(lang_entry, dict) else (lang_entry or "en_US")
 
-            if resp.status_code == 200:
-                succ += 1
-                status = "Sent"
-            else:
-                fail += 1
-                status = f"Failed ({resp.status_code}): {err}"
+            for i, num in enumerate(numbers, start=1):
+                url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+                headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": num,
+                    "type": "template",
+                    "template": {"name": template_name, "language": {"code": lang_code}}
+                }
+                resp = requests.post(url, headers=headers, json=payload)
+                try:
+                    err = resp.json().get("error", {}).get("message", "")
+                except Exception:
+                    err = resp.text
+                if resp.status_code == 200:
+                    success += 1
+                    status = "Sent"
+                else:
+                    failure += 1
+                    status = f"Failed ({resp.status_code}): {err}"
+                log.append([num, resp.status_code, err])
+                status_area.write(f"{i}/{total} → {num}: {status}")
+                progress.progress(i/total)
+                time.sleep(0.05)
 
-            log.append([num, resp.status_code, err])
-            status_area.write(f"{idx}/{total} → {num}: {status}")
-            progress.progress(idx/total)
-            time.sleep(0.05)
+            st.session_state["success"] = success
+            st.session_state["failure"] = failure
+            st.success(f"Completed: {success} sent, {failure} failed out of {total} leads.")
 
-        st.session_state["success"] = succ
-        st.session_state["failure"] = fail
-        st.success(f"Completed: {succ} sent, {fail} failed out of {total} leads.")
+            df_log = pd.DataFrame(log, columns=["Phone Number","Status Code","Error Message"])
+            buf = io.StringIO()
+            df_log.to_csv(buf, index=False)
+            st.download_button("Download Log", buf.getvalue(), "ncsf_log.csv", "text/csv")
 
-        # Download log
-        df_log = pd.DataFrame(log, columns=["Phone Number","Status Code","Error Message"])
-        buf = io.StringIO()
-        df_log.to_csv(buf, index=False)
-        st.download_button("Download Log", buf.getvalue(), "ncsf_log.csv", "text/csv")
+    # Metrics
+    leads_loaded = len(st.session_state["numbers"])
+    succ = st.session_state["success"]
+    fail = st.session_state["failure"]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Leads Loaded", leads_loaded)
+    m2.metric("Successful", succ if succ>0 else "-")
+    m3.metric("Failed", fail if fail>0 else "-")
 
-# Metrics row
-leads_loaded = len(st.session_state["numbers"])
-succ = st.session_state["success"]
-fail = st.session_state["failure"]
-m1, m2, m3 = st.columns(3)
-m1.metric("Leads Loaded", leads_loaded)
-m2.metric("Successful", succ if succ>0 else "-")
-m3.metric("Failed", fail if fail>0 else "-")
+    # Preview Uploaded Leads
+    if st.session_state["numbers"]:
+        st.subheader("Preview Uploaded Leads")
+        df_disp = pd.DataFrame({"Phone Number": st.session_state["numbers"]})
+        df_disp.index = df_disp.index + 1
+        df_disp.index.name = "No."
+        st.dataframe(df_disp, use_container_width=True)
 
-# Preview Uploaded Leads
-if st.session_state["numbers"]:
-    st.subheader("Preview Uploaded Leads")
-    df_disp = pd.DataFrame({"Phone Number": st.session_state["numbers"]})
-    df_disp.index = df_disp.index + 1
-    df_disp.index.name = "No."
-    st.dataframe(df_disp, use_container_width=True)
-
-st.markdown("---")
-st.caption("Built for NCSF Singapore · 2025")
+    st.markdown("---")
+    st.caption("Built for NCSF Singapore · Powered by internal tech team")
