@@ -77,8 +77,8 @@ if st.sidebar.button("Save Credentials"):
     else:
         st.sidebar.error("All fields are required.")
 
-ACCESS_TOKEN       = token_input or ACCESS_TOKEN
-PHONE_NUMBER_ID   = phone_id_input or PHONE_NUMBER_ID
+ACCESS_TOKEN        = token_input or ACCESS_TOKEN
+PHONE_NUMBER_ID    = phone_id_input or PHONE_NUMBER_ID
 BUSINESS_ACCOUNT_ID = business_id_input or BUSINESS_ACCOUNT_ID
 
 st.sidebar.markdown("---")
@@ -132,16 +132,6 @@ with col_main:
         df_raw["Phone Number"] = df_raw["Raw Input"].astype(str).apply(normalize_number)
         valid_df = df_raw.dropna(subset=["Phone Number"])
         st.session_state["numbers"] = valid_df["Phone Number"].tolist()
-
-    # Preview uploaded leads
-    if st.session_state["numbers"]:
-        st.subheader("Preview Uploaded Leads")
-        df_preview = valid_df.reset_index(drop=True).rename(
-            columns={"Raw Input": "Input", "Phone Number": "Normalized"}
-        )
-        df_preview.index = df_preview.index + 1
-        df_preview.index.name = "No."
-        st.dataframe(df_preview, use_container_width=True)
 
     # Handle sending
     if send_btn:
@@ -211,6 +201,16 @@ with col_main:
     m1.metric("Leads Loaded", leads_loaded)
     m2.metric("Successful", succ if succ > 0 else "-")
     m3.metric("Failed", fail if fail > 0 else "-")
+
+    # Preview Uploaded Leads (NOW below the stats)
+    if st.session_state["numbers"]:
+        st.subheader("Preview Uploaded Leads")
+        df_preview = valid_df.reset_index(drop=True).rename(
+            columns={"Raw Input": "Input", "Phone Number": "Normalized"}
+        )
+        df_preview.index = df_preview.index + 1
+        df_preview.index.name = "No."
+        st.dataframe(df_preview, use_container_width=True)
 
     st.markdown("---")
     st.caption("Built for NCSF Singapore · 2025")
