@@ -1,4 +1,11 @@
 import streamlit as st
+
+st.set_page_config(
+    page_title="NCSF WhatsApp Sender",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 import pandas as pd
 import requests
 import time
@@ -76,10 +83,10 @@ PHONE_NUMBER_ID = phone_id_input or PHONE_NUMBER_ID
 BUSINESS_ACCOUNT_ID = business_id_input or BUSINESS_ACCOUNT_ID
 
 # --- Main Layout ---
-col_config, col_main = st.columns([3, 7], gap="large")
+col_config, col_main = st.columns([4, 6], gap="large")
 
 with col_config:
-    st.header("Configuration")
+    st.header("Config")
 
     file = st.file_uploader(
         "Upload leads CSV (one column, no header; e.g. 6598578141, +65 98578141, 98578141)",
