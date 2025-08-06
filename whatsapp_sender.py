@@ -185,8 +185,10 @@ with col_main:
 
             st.session_state["success"] = success
             st.session_state["failure"] = failure
-            st.success(f"Completed: {success} sent, {failure} failed out of {total} leads.")
-
+            if failure > 0:
+                st.success(f"Completed: {success} sent, {failure} failed out of {total} leads.")
+            else:
+                st.success(f"Completed: {success} sent out of {total} leads.")
             # Download log
             df_log = pd.DataFrame(log, columns=["Phone Number","Status Code","Error Message"])
             buf = io.StringIO()
