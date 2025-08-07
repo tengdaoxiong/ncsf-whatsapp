@@ -14,13 +14,6 @@ import io
 import re
 import os
 
-# --- Authentication (lock the app) ---
-auth_pw = st.secrets["app"]["auth_password"]
-entered = st.sidebar.text_input("🔒 Enter app password", type="password")
-if entered != auth_pw:
-    st.sidebar.error("🔑 Invalid password")
-    st.stop()
-
 # --- Helper: normalize phone numbers ---
 def normalize_number(raw):
     s = re.sub(r"\D", "", raw)
