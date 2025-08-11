@@ -16,14 +16,31 @@ import os
 
 # --- Helper: normalize phone numbers ---
 def normalize_number(raw):
-    s = re.sub(r"\D", "", raw)
-    if s.startswith("65") and len(s) == 10:
-        return s
-    if len(s) == 8:
-        return "65" + s
-    if len(s) == 9 and s.startswith("0"):
-        return "65" + s[1:]
-    return None
+    # accept strings like "+64 210 241 5992", "'+64 ...", "<+64 ...>", etc.
+    s = str(raw).strip()
+    s = s.replace("\u200b", "")            # remove zero-width chars
+    s = re.sub(r"[<>]", "", s)             # drop angle brackets
+    s = s.lstrip(" '\"")                   # drop leading quotes/spaces
+
+    # keep only digits; treat leading '+' or '00' as international
+    if s.startswith("+"):
+        digits = re.sub(r"\D", "", s)      # strip '+' and non-digits
+    else:
+        digits = re.sub(r"\D", "", s)
+        if digits.startswith("00"):
+            digits = digits[2:]            # convert 00XX… to international
+        # Singapore fallbacks for local-looking numbers
+        if len(digits) == 8:
+            digits = "65" + digits
+        elif len(digits) == 9 and digits.startswith("0"):
+            digits = "65" + digits[1:]
+
+    # basic sanity: 8–15 digits, no leading 0 in final form
+    if not digits or digits.startswith("0"):
+        return None
+    if not (8 <= len(digits) <= 15):
+        return None
+    return digits  # send this to WhatsApp API
 
 # --- Credentials storage (local fallback) ---
 CRED_FILE = "config.txt"
